@@ -1,38 +1,35 @@
 # Below is what this script does
-# 1. Merges the training and the test sets to create one data set.
+# 1. Merges the training and test datasets into one.
 # 2. Extracts only the measurements on the mean and standard deviation for each measurement.
-# 3. Uses descriptive activity names to name the activities in the data set
-# 4. Appropriately labels the data set with descriptive variable names.
-# 5. From the data set in step 4, creates a second, independent tidy data set with the average
-# of each variable for each activity and each subject.
+# 3. Uses descriptive activity names to name the activities.
+# 4. Appropriately labels the dataset with descriptive variable names.
+# 5. Creates a second tidy dataset with the average of each variable for each activity and subject.
 
-# load packages data.table and reshape2
+# Load necessary packages
 if (!require("pacman")) {
     install.packages("pacman")
 }
 pacman::p_load(data.table, reshape2, gsubfn)
 
-# get data from zip file
+# Set working directory and download data
 path <- getwd()
 url <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
 download.file(url, file.path(path, "data.zip"))
 unzip(zipfile = "data.zip")
 
-# load activity_labels and features
-activityLabels <- fread(
-    file.path(path, "UCI HAR Dataset/activity_labels.txt"),
-    col.names = c("classLabels", "activityNames")
-)
+# Load activity labels and feature names
+activity_labels <- fread(file.path(path, "UCI HAR Dataset/activity_labels.txt"),
+                         col.names = c("id", "activity_name"))
 
-features <-fread(
-        file.path(path, "/UCI HAR Dataset/features.txt"),
-        col.names = c("index", "featureNames")
-    )
+features <- fread(file.path(path, "UCI HAR Dataset/features.txt"),
+                  col.names = c("index", "feature_name"))
 
-# extracting mean and std from features
-featuresNeeded <- grep("(mean|std)\\(\\)", features[, featureNames])
-measurements <- features[featuresNeeded, featureNames]
-measurements <- gsubfn(
+# Filter features for mean and standard deviation measurements
+selected_features <- grep("(mean|std)\\(\\)", features[, feature_name])
+selected_measurements <- features[selected_features, feature_name]
+
+# Clean up feature names
+cleaned_measurements <- gsubfn(
     "(^t|^f|Acc|Gyro|Mag|BodyBody|\\(\\))",
     list(
         "t" = "Time",
@@ -43,50 +40,43 @@ measurements <- gsubfn(
         "BodyBody" = "Body",
         "()" = ""
     ),
-    measurements
+    selected_measurements
 )
-# load train data
-## read in train, filtering based on features needed, using with=False to retain data.frame class
-train <- fread(file.path(path, "/UCI HAR Dataset/train/X_train.txt"))[, featuresNeeded, with = FALSE]
-setnames(train, colnames(train), measurements) # change column name based on measurement
 
-activityTrain <-
-    fread(file.path(path, "/UCI HAR Dataset/train/y_train.txt"),
-          col.names = "Activity")
-subjectTrain <-
-    fread(file.path(path, "/UCI HAR Dataset/train/subject_train.txt"),
-          col.names = "SubjectNo.")
+# Load training data and apply feature filter
+train_data <- fread(file.path(path, "UCI HAR Dataset/train/X_train.txt"))[, selected_features, with = FALSE]
+setnames(train_data, colnames(train_data), cleaned_measurements)
 
-train <- cbind(activityTrain, subjectTrain, train) # bind all columns together
+train_labels <- fread(file.path(path, "UCI HAR Dataset/train/y_train.txt"), col.names = "activity_id")
+train_subjects <- fread(file.path(path, "UCI HAR Dataset/train/subject_train.txt"), col.names = "subject_id")
 
-# load test data
-test <- fread(file.path(path, "/UCI HAR Dataset/test/X_test.txt"))[, featuresNeeded, with = FALSE]
-setnames(test, colnames(test), measurements)
+# Combine train data with activity and subject info
+train_data <- cbind(train_labels, train_subjects, train_data)
 
-activityTest <-
-    fread(file.path(path, "/UCI HAR Dataset/test/y_test.txt"),
-          col.names = "Activity")
-subjectTest <-
-    fread(file.path(path, "/UCI HAR Dataset/test/subject_test.txt"),
-          col.names = "SubjectNo.")
+# Load test data and apply feature filter
+test_data <- fread(file.path(path, "UCI HAR Dataset/test/X_test.txt"))[, selected_features, with = FALSE]
+setnames(test_data, colnames(test_data), cleaned_measurements)
 
-test <- cbind(activityTest, subjectTest, test) 
+test_labels <- fread(file.path(path, "UCI HAR Dataset/test/y_test.txt"), col.names = "activity_id")
+test_subjects <- fread(file.path(path, "UCI HAR Dataset/test/subject_test.txt"), col.names = "subject_id")
 
-# merge test and train by rows
-testTrain <- rbind(train, test)
+# Combine test data with activity and subject info
+test_data <- cbind(test_labels, test_subjects, test_data)
 
-# factor Activity column based on activity labels
-# use factor() to set own levels and labels
-testTrain[["Activity"]] <- factor(testTrain[, Activity]
-                                  , levels = activityLabels[["classLabels"]]
-                                  , labels = activityLabels[["activityNames"]]
-                                  )
-# as.factor() to create turn subject numbers into factors
-testTrain[["SubjectNo."]] <- as.factor(testTrain[, SubjectNo.])
+# Merge training and test datasets
+combined_data <- rbind(train_data, test_data)
 
-# melt then cast the data table
-testTrain <- melt.data.table(testTrain, id=c("SubjectNo.", "Activity")) # melt down to variable & value
-testTrain <- dcast(testTrain, SubjectNo. + Activity ~ variable, mean) # average of SubjectNo & Activity
+# Convert activity IDs to descriptive activity names
+combined_data[["activity_id"]] <- factor(combined_data[["activity_id"]],
+                                         levels = activity_labels[["id"]],
+                                         labels = activity_labels[["activity_name"]])
 
-# write final tidy data into new file
-fwrite(testTrain, file="tidyData.txt")
+# Convert subject IDs to factors
+combined_data[["subject_id"]] <- as.factor(combined_data[["subject_id"]])
+
+# Reshape the data: melt to long format and then calculate mean for each subject and activity
+long_data <- melt.data.table(combined_data, id = c("subject_id", "activity_id"))
+tidy_data <- dcast(long_data, subject_id + activity_id ~ variable, mean)
+
+# Save the tidy dataset to a file
+fwrite(tidy_data, file = "tidyData.txt")
