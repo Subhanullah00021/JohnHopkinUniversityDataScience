@@ -1,0 +1,52 @@
+# Load necessary libraries
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(chron)
+
+# Load and inspect data
+activity_data <- fread(unzip("activity.zip"), fill = TRUE)
+head(activity_data)
+
+# Sum steps per day
+daily_steps <- activity_data %>%
+    group_by(date) %>%
+    summarise(total_steps = sum(steps, na.rm = TRUE), .groups = 'drop')
+
+# Plot histogram of daily steps
+ggplot(daily_steps, aes(x = total_steps)) +
+    geom_histogram(fill = "lightblue", color = "darkblue", bins = 30) +
+    labs(x = "Total Steps", y = "Frequency", title = "Distribution of Steps Per Day")
+
+# Calculate mean and median of total steps
+daily_steps %>%
+    summarise(mean_steps = mean(total_steps), median_steps = median(total_steps))
+
+# Impute missing steps
+imputed_data <- activity_data
+for (i in 1:nrow(imputed_data)) {
+    if (is.na(imputed_data$steps[i])) {
+        avg_steps <- mean(imputed_data$steps[imputed_data$interval == imputed_data$interval[i]], na.rm = TRUE)
+        imputed_data$steps[i] <- avg_steps
+    }
+}
+
+# Summarize data after imputation
+imputed_daily_steps <- imputed_data %>%
+    group_by(date) %>%
+    summarise(total_steps = sum(steps), .groups = 'drop')
+
+# Plot histogram of imputed data
+ggplot(imputed_daily_steps, aes(x = total_steps)) +
+    geom_histogram(fill = "lightgreen", color = "darkgreen", bins = 30) +
+    labs(x = "Total Steps (Imputed)", y = "Frequency", title = "Distribution of Steps Per Day (Imputed)")
+
+# Weekend vs Weekday analysis
+imputed_data <- imputed_data %>%
+    mutate(is_weekend = is.weekend(date))
+
+# Plot steps for weekdays and weekends
+ggplot(imputed_data, aes(x = interval, y = steps, color = is_weekend)) +
+    geom_line() +
+    facet_wrap(~is_weekend, labeller = labeller(is_weekend = c(`TRUE` = "Weekend", `FALSE` = "Weekday"))) +
+    labs(x = "Interval", y = "Steps", title = "Weekday vs Weekend Activity Patterns")
