@@ -1,0 +1,42 @@
+# Load necessary libraries
+library(data.table)
+library(dplyr)
+library(ggplot2)
+
+# Load and inspect storm data
+storm_data <- fread("stormdata.csv", fill = TRUE)
+head(storm_data)
+
+# Define function to convert damage exponents to numeric values
+convert_to_cost <- function(exp) {
+  if (exp == "H") 1E-4
+  else if (exp == "K") 1E-3
+  else if (exp == "M") 1
+  else if (exp == "B") 1E3
+  else 1E-6
+}
+
+# Process economic damage data
+economic_data <- storm_data %>%
+    select(evtype, propdmg, propdmgexp, cropdmg, cropdmgexp) %>% 
+    mutate(
+        adjusted_prop_dmg = propdmg * sapply(propdmgexp, convert_to_cost), 
+        adjusted_crop_dmg = cropdmg * sapply(cropdmgexp, convert_to_cost)
+    ) %>%
+    group_by(evtype) %>%
+    summarise(
+        total_property_dmg = sum(adjusted_prop_dmg), 
+        total_crop_dmg = sum(adjusted_crop_dmg), 
+        .groups = 'drop'
+    ) %>%
+    arrange(desc(total_property_dmg), desc(total_crop_dmg)) %>%
+    slice(1:10) %>%
+    gather(key = "damage_type", value = "value", total_property_dmg, total_crop_dmg)
+
+# Plot top 10 storm types by economic damage
+ggplot(economic_data, aes(x = reorder(evtype, -value), y = value, fill = damage_type)) +
+    geom_bar(stat = "identity", position = "dodge") +
+    labs(x = "Storm Type", y = "Total Damage (Millions USD)", 
+         title = "Top 10 Storm Event Types by Economic Impact") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_manual(values = c("forestgreen", "gray"))
