@@ -1,0 +1,23 @@
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Map
+Hover to the spots and link to the website of these fun attraction sites!
+
+```{r, echo = F}
+library(leaflet)
+tourSpot <- data.frame(lat = c(28.417839, 40.689249, 37.819929, 38.733081, 37.865101),
+                       lng = c(-81.581235, -74.044500, -122.478255, -109.592514, -119.538329))
+tourSites <- c(
+  "<a href='https://disneyworld.disney.go.com/'>Disney World</a>",
+  "<a href='https://www.nps.gov/stli/index.htm'>Statue of Liberty</a>",
+  "<a href='http://www.goldengatebridge.org/'>Golden Gate Bridge</a>",
+  "<a href='https://www.nps.gov/arch/index.htm'>Arches National Park</a>",
+  "<a href='https://www.nps.gov/yose/index.htm'>Yosemite National Park</a>"
+)
+
+tourSpot %>% leaflet() %>% addTiles() %>% addMarkers(popup = tourSites)
+```
