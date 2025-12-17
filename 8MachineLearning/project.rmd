@@ -1,0 +1,124 @@
+---
+title: "Week 4 Project: Classifying Exercise Types Using Wearable Data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE)
+
+Objective
+
+In recent years, wearable technology such as Jawbone Up, Nike FuelBand, and Fitbit has enabled the collection of vast amounts of data related to personal activity. These devices have become integral to the "quantified self" movement, where individuals continuously track their health metrics, behaviors, or simply indulge in their tech interests. While these devices excel at tracking the frequency of various activities, they don’t usually measure the quality of performance.
+
+For this assignment, the objective is to use accelerometer data collected from participants using devices worn on the belt, forearm, arm, and dumbbell to classify how well they perform barbell lifts. Participants were asked to perform the exercises in five different ways, some of which were correct and others incorrect. More details can be found on the original site
+
+under "Weight Lifting Exercise Dataset."
+
+The goal is to predict the classification (denoted "classe") of the exercises using various sensor data. You can utilize all variables except for the exercise type ("classe"). The final output should be a report detailing the steps taken to build the predictive model, cross-validation techniques, error estimation, and rationale behind the choices made. Additionally, you will apply the model to predict outcomes for 20 new cases.
+Data Sources
+
+
+Data Processing and Model Building
+Step 1: Loading the Libraries
+Writing
+
+library(caret)
+library(randomForest)
+
+if (!file.exists('train.csv')) {
+download.file(url = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv',
+destfile = 'train.csv', method = 'curl', quiet = TRUE)
+}
+
+if (!file.exists('test.csv')) {
+download.file(url = 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv',
+destfile = 'test.csv', method = 'curl', quiet = TRUE)
+}
+
+trainRaw <- read.csv('train.csv')
+testRaw <- read.csv('test.csv')
+Step 2: Data Preprocessing
+1. Eliminate Unnecessary Columns
+Writing
+
+str(trainRaw)
+train <- trainRaw[, 6(trainRaw)]
+2. Split Data into Training and Testing Sets
+Writing
+
+set.seed(23954)
+inTrain <- createDataPartition(y = train$classe, p = 0.7, list = F)
+training <- train[inTrain, ]
+testing <- train[-inTrain, ]
+3. Filter Features with Low Variability
+Writing
+
+nzv <- nearZeroVar(train, saveMetrics = T)
+keepFeat <- row.names(nzv[nzv$nzv == FALSE, ])
+training <- training[, keepFeat]
+4. Remove Columns with Missing Values
+Writing
+
+training <- training[, colSums(is.na(training)) == 0]
+dim(training)
+Step 3: Model Building
+1. Cross-validation Setup
+Writing
+
+modCtl <- trainControl(method = 'cv', number = 5)
+2. Random Forest Model
+Writing
+
+set.seed(2384)
+modRf <- train(classe ~. , data = training, method = 'rf', trControl = modCtl)
+
+    Summarize Random Forest Model
+
+Writing
+
+modRf$finalModel
+
+    Evaluate Model Accuracy with Confusion Matrix
+
+Writing
+
+predRf <- predict(modRf, newdata = testing)
+confusionMatrix(predRf, testing$classe)$table
+confusionMatrix(predRf, testing$classe)$overall[1]
+
+The accuracy of the Random Forest model is approximately 99.6%.
+3. Gradient Boosting Model
+Writing
+
+modGbm <- train(classe ~., data = training, method = 'gbm', trControl = modCtl, verbose = F)
+
+    Summarize Gradient Boosting Model
+
+Writing
+
+modGbm$finalModel
+
+    Evaluate Model Accuracy with Confusion Matrix
+
+Writing
+
+predGbm <- predict(modGbm, newdata = testing)
+confusionMatrix(predGbm, testing$classe)$table
+confusionMatrix(predGbm, testing$classe)$overall[1]
+
+The Gradient Boosting model achieves an accuracy of around 98.8%.
+Step 4: Prediction on Test Data
+
+Given the superior performance of Random Forest, we will use this model for final predictions.
+Writing
+
+predRfTest <- predict(modRf, newdata = testRaw)
+predRfTest
+
+Alternatively, the Gradient Boosting model can also be used for prediction:
+Writing
+
+predGbmTest <- predict(modGbm, newdata = testRaw)
+table(predRfTest, predGbmTest)
+
+Both models provide the same predictions, as seen in the confusion matrix above.
