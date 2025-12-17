@@ -1,0 +1,273 @@
+
+
+## Loading the data
+
+```{r loading, warning = FALSE}
+
+fileRead <- function(file) {
+        camino <- paste('data/final/en_US/en_US.', file, '.txt', sep = '') # The path of the files
+        con <- file(camino, 'r') # Connection to the file is opened
+        doc <- readLines(con, skipNul = TRUE) # The document is read depending on the connection opened
+        close(con) # The connection is closed
+        return(doc)
+}
+
+blogs_file <- fileRead('blogs')
+news_file <- fileRead('news')
+twitter_file <- fileRead('twitter')
+```
+
+## Summary of the data
+
+```{r summary}
+
+dfsum <- data.frame(
+        File = c('Blogs', 'News', 'Twitter'),
+        Size = c(file.size('data/final/en_US/en_US.blogs.txt')/1024/1024,
+                 file.size('data/final/en_US/en_US.news.txt')/1024/1024,
+                 file.size('data/final/en_US/en_US.twitter.txt')/1024/1024),
+        Lines = c(length(blogs_file), length(news_file), length(twitter_file)),
+        Words = c(sum(count_words(blogs_file)),
+                  sum(count_words(news_file)),
+                  sum(count_words(twitter_file)))
+        )
+
+dfsum
+```
+
+## Bar plots of the summary
+
+```{r color}
+colors <- c('gray75', 'lightsalmon', 'lightblue') # Colors will be used 
+```
+
+### Size plot
+
+```{r bar_size}
+
+colors <- c('gray75', 'lightsalmon', 'lightblue') # Colors will be used 
+
+with(dfsum, barplot(Size, names.arg = File,
+     ylab = 'Space occupied by the file (in MB)',
+     xlab = 'Name of the file',
+     main = 'Size of each file',
+     col = colors))
+```
+
+### Lines plot
+
+```{r bar_lines}
+
+with(dfsum, barplot(Lines/1000000, names.arg = File,
+     ylab = 'Number of lines (#) in Millions',
+     xlab = 'Name of the file',
+     main = 'Number of lines of each file',
+     col = colors))
+```
+
+### Words plot
+
+```{r bar_words}
+
+with(dfsum, barplot(Words/1000000, names.arg = File,
+     ylab = 'Number of Words (#) in Millions',
+     xlab = 'Name of the file',
+     main = 'Number of words per file',
+     col = colors))
+```
+
+## Corpus creation
+
+```{r corpus_create}
+camino <- 'data/final/en_US' # Only the location of the text files is required
+engCorpus <- Corpus(DirSource(directory = camino, mode = 'text', encoding = 'UTF-8'))
+```
+
+## Corpus cleaning
+
+```{r clean}
+
+newsCorpus <- NA
+
+cleanCorp <- function(corpus, lower){
+        corp <- tm_map(corpus, removePunctuation)
+        corp <- tm_map(corp, stripWhitespace)
+        corp <- tm_map(corp, content_transformer(tolower))
+        
+        return(corp)
+}
+
+newsCorpus <- cleanCorp(engCorpus[2]) # The second index represent the news file
+```
+
+## Term document matrix
+
+```{r }
+
+tdmGenerator <- function(corp){
+        tdm <- TermDocumentMatrix(corp)
+        
+        tdm <- removeSparseTerms(tdm, 0.7) # Maximal allowed sparsity
+        return(tdm)
+}
+```
+
+## Frequency ratio plots
+
+```{r frequency_ratio_plots, warning = FALSE}
+
+frequency_plots <- function(corpus, file){
+        
+        tdm <- tdmGenerator(corpus) # Call to the tdmGenerator helper function
+        
+        df_freq <- data.frame(Palabra = tdm$dimnames$Terms, Frecuencia = tdm$v)
+        
+        total_freq <- sum(df_freq[,2])
+        
+        df_freq <- df_freq[df_freq$Frecuencia > 20, ] # Subset of the data which appeared > 20 times
+               
+        df_freq <- df_freq[order(df_freq[,2], decreasing = TRUE),]
+        
+        total_words <- length(df_freq[,1])
+               
+        max_val <- total_words*0.33 # Using one third of the total words
+        step <- 1 # A step of 1 is used to get an accurate plot
+               
+        df_freq <- mutate(df_freq, Ratio = (Frecuencia/total_freq) * 100)
+               
+        df <- data.frame('Top_1' = df_freq[1,3])
+               
+        for (num in c(seq(1, max_val, step))){
+               current_num <- paste('Top_', num, sep = '')
+               df[,current_num] <- round(sum(df_freq[1:num, 3]),4)
+        }
+               
+        xdata <- c(0, 1, seq(2,max_val, step))
+        ydata <- c(0, df[,1:length(df)])
+        ydata <- as.numeric(unlist(ydata))
+               
+        plot(ydata ~ xdata, xlim = c(0,max_val), ylim = c(0,100),
+                    main = paste('Number of words chosen and total of words covered in', file), 
+                    xlab = 'Number (#) of words chosen', ylab = 'Percent (%) of total frequencies covered')
+        
+        fit <- lm(ydata ~ xdata)
+        fit2 <- loess(ydata ~ xdata, degree = 2, span = 0.95)
+        
+        abline(h = 70, col = 'blue') # Threshold of 70% of the frequencies of the whole document
+        lines(xdata, fit$fitted.values, col = 'red')
+        lines(xdata, fit2$fitted, col = 'orange')
+               
+        legend(legend = c('Points','Linear model', 'Second-order model'), 'topleft',
+        col = c('black', 'red', 'orange'), pch = c(20,-1,-1), lty = c(0,1,1))
+}
+
+frequency_plots(newsCorpus, 'news')
+```
+
+```{r top15_prep, include = FALSE}
+## Using part of the code included in the frequency_plots function
+
+tdm <- tdmGenerator(newsCorpus) # Call to the tdmGenerator helper function
+        
+df_freq <- data.frame(Palabra = tdm$dimnames$Terms, Frecuencia = tdm$v)
+        
+total_freq <- sum(df_freq[,2])
+
+df_freq <- df_freq[df_freq$Frecuencia > 20, ] # Subset of the data which appeared > 20 times
+               
+df_freq <- df_freq[order(df_freq[,2], decreasing = TRUE),]
+               
+df_freq <- mutate(df_freq, Ratio = (Frecuencia/total_freq) * 100)
+
+```
+
+```{r top15_pres}
+head(df_freq, 10)
+```
+
+## Simple n_gram model
+
+### 2-gram model
+
+First we get our random sample and set the *n* to 2 (bigram), and remove the *NA* values, these values represent a small percentage of the whole file, but it affects our n-gram performance and creation.
+
+```{r bi_gram_1}
+## Creating a 2-gram model using 25% of the blogs file
+
+set.seed(1023)
+
+n <- 2
+
+num_lines <- dfsum[dfsum$File == 'Blogs', 'Lines'] * .25 # Considering 25% of the total lines
+
+doc <- blogs_file[sample(1:num_lines)]
+
+bitokens <- unlist(tokenize_ngrams(doc, n = n))
+print(paste('Ratio of NAs in the bitokens: ', round(sum(is.na(bitokens))/length(bitokens) * 100, digits = 4), '%', sep = ''))
+```
+
+```{r bi_gram_2}
+bitoken_na <- na.omit(bitokens)
+bigram <- ngram(bitoken_na, n)
+
+head(get.phrasetable(bigram), 10)
+```
+
+### 3-gram model
+
+```{r tri_gram_1}
+## Creating a 3-gram model using 25% of the twitter file
+
+set.seed(1022)
+
+n <- 3
+
+num_lines <- dfsum[dfsum$File == 'Twitter', 'Lines'] * .25 # Considering 25% of the total lines
+
+doc <- twitter_file[sample(1:num_lines)]
+
+tritokens <- unlist(tokenize_ngrams(doc, n = n))
+print(paste('Ratio of NAs in the tritokens: ', round(sum(is.na(tritokens))/length(tritokens) * 100, digits = 4), '%', sep = ''))
+```
+
+There are also *NA* values on this file, but these are not significant to the whole file.
+
+```{r tri_gram_2}
+tritoken_na <- na.omit(tritokens)
+trigram <- ngram(tritoken_na, n)
+
+head(get.phrasetable(trigram), 10)
+```
+
+Looking at these pairs, we can grasp some frequent words used on twitter, these correspond to *thanks for the* (which is probably followed by *follow*), or *for the follow*. This denotes an important factor, that the source of data affects which is the most probable word, the type of language is different depending on the sources of information. 
+
+This factor makes that the model take one of the following routes:
+
+* Declare to which user is the model being addressed
+* Generate a generalizable model using the three types of writing
+
+The first option can make the model very accurate when addressing a certain type of user, while the second model can fit every type of user, but having (probably) a poor performance when compared to the specialized model.
+
+### 4-gram model
+
+```{r fou_gram_1}
+## Creating a 4-gram model using 25% of the news file
+
+set.seed(1021)
+
+n <- 4
+
+num_lines <- dfsum[dfsum$File == 'News', 'Lines'] * .25 # Considering 25% of the total lines
+
+doc <- news_file[sample(1:num_lines)]
+
+foutokens <- unlist(tokenize_ngrams(doc, n = n))
+print(paste('Ratio of NAs in the tritokens: ', round(sum(is.na(foutokens))/length(foutokens) * 100, digits = 4), '%', sep = ''))
+```
+
+```{r fou_gram_2}
+foutoken_na <- na.omit(foutokens)
+fougram <- ngram(foutoken_na, n)
+
+head(get.phrasetable(fougram), 10)
+```
