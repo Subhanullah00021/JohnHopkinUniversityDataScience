@@ -1,0 +1,41 @@
+
+
+## Data download
+
+
+```{r data, eval = FALSE}
+urlfile <- 'https://raw.githubusercontent.com/milkbacon/9-Developing-Data-Products/main/data/diet.csv'
+if(!file.exists('dietas.csv')){
+       download.file(urlfile, 'dietas.csv')
+}
+```
+## Data formatting
+
+```{r format}
+diet <- read.csv('dietas.csv', 
+                 col.names = c('USER', 'DATE', 'WEIGHT', 'BMI', 'BFP', 'MMP', 'VF'),
+                 colClasses = c('factor', 'character', 'numeric', 'numeric', 'numeric', 'numeric','numeric'))
+diet[,'DATE'] <- as.Date(diet[,'DATE'], format = '%m/%d/%Y')
+```
+
+```{r select}
+selectedUser <- 'BR'
+selectedMeasure <- 'MMP'
+
+```
+
+## Data inspection
+
+```{r show}
+head(diet, 6)
+person_diet <- diet[diet$USER == selectedUser,] # Subsetting the data
+```
+
+## Plotting depending on the user
+```{r plot}
+plot(x = person_diet$DATE, y = person_diet[,selectedMeasure], pch = 20,
+     xlab = 'date', ylab = tolower(selectedMeasure), col = 'darkgoldenrod',
+     main = paste('Measurement of', selectedMeasure, 'from the user', selectedUser, 'overtime'))
+abline(lm(person_diet[,selectedMeasure] ~ person_diet$DATE), col = 'red', lty = 4)
+legend('topright', 'Fitted line', lty = 2, col = 'red')
+```
